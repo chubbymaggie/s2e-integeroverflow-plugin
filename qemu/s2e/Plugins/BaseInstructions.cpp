@@ -548,6 +548,7 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 
     //需要改进：当前，这里默认size的值就是Int32位的；
     	//klee::ref<klee::Expr> symValue = state->readMemory(address, klee::Expr::Int16);
+		//test
     	klee::ref<klee::Expr> symValue = state->readMemory(address, klee::Expr::Int32);
 /*	s2e()->getMessagesStream() << "---------param1 symbolic value : " << symValue << '\n';
 
