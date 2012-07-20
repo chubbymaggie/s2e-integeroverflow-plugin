@@ -75,7 +75,7 @@ private:
 	//wzy 添加
 	void getIntOverflowExample(S2EExecutionState *state);
 	//fwl 添加 
-	bool intOverflow;
+	//bool intOverflow;
 };
 
 class BaseInstructionsPluginInvokerInterface {
