@@ -65,43 +65,36 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 	    //这里先以此为类子，Add w32 a b ---> UltExpr w32 (Add w32 a b) (w32 a)
 	    case Expr::Add: res = visitAdd(static_cast<AddExpr&>(ep));
 	    	{
-	    		std::cout << "res.argument" << res.argument << '\n';
 			ref<Expr> lkid = ep.getKid(0);
 	    		ref<Expr> rkid = ep.getKid(1);
-	    		//int j = 0;
 
-	    		std::cout << "e->Width:" << e.get()->getWidth() << '\n';/////这里Width还是不能使用
-
-		    	if ( ep.getWidth() == ep.Int32)
-		    	{
-		    		ref<Expr> cond = klee::UltExpr::create(e, lkid);
-		    		return cond;
-		    	}
-		    	else
-		    	{
-
-		    	}
-	    		break;
+	    		//std::cout << "e->Width:" << e.get()->getWidth() << '\n';/////这里Width还是不能使用
+		    	ref<Expr> cond = klee::UltExpr::create(e, lkid);
+		    	return cond;
 	    	}
-	    	//取得l，r
-//	    	ref<Expr> lkid = ep.getKid(0);
-//
-//	    	ref<Expr> rkid = ep.getKid(1);
-
-	    	//判断是不是32位的
-	    case Expr::Sub: res = visitSub(static_cast<SubExpr&>(ep)); break;
+	    case Expr::Sub: res = visitSub(static_cast<SubExpr&>(ep)); 
+		{
+			ref<Expr> lkid = ep.getKid(0);
+			ref<Expr> rkid = ep.getKid(1);
+			
+			ref<Expr> cond = klee::UltExpr::create(lkid, rkid);
+			return cond;
+		}
 	    case Expr::Mul: res = visitMul(static_cast<MulExpr&>(ep));
 		{
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 			
-			if ( ep.getWidth() == ep.Int32 ){
-				ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e,rkid),lkid);
-				return cond; 
-			}
-		 break;
+			ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
+			return cond; 
 		}
-	    case Expr::UDiv: res = visitUDiv(static_cast<UDivExpr&>(ep)); break;
+	    case Expr::UDiv: res = visitUDiv(static_cast<UDivExpr&>(ep)); 
+		{
+			ref<Expr> rkid = ep.getKid(1);
+
+			ref<Expr> cond = klee::NeExpr::create(rkid ,klee::ConstantExpr::create(0,ep.getWidth()));
+			return cond;
+		}
 	    case Expr::SDiv: res = visitSDiv(static_cast<SDivExpr&>(ep)); break;
 	    case Expr::URem: res = visitURem(static_cast<URemExpr&>(ep)); break;
 	    case Expr::SRem: res = visitSRem(static_cast<SRemExpr&>(ep)); break;
@@ -109,7 +102,14 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 	    case Expr::And: res = visitAnd(static_cast<AndExpr&>(ep)); break;
 	    case Expr::Or: res = visitOr(static_cast<OrExpr&>(ep)); break;
 	    case Expr::Xor: res = visitXor(static_cast<XorExpr&>(ep)); break;
-	    case Expr::Shl: res = visitShl(static_cast<ShlExpr&>(ep)); break;
+	    case Expr::Shl: res = visitShl(static_cast<ShlExpr&>(ep));
+		{
+			ref<Expr> lkid = ep.getKid(0);
+			ref<Expr> rkid = ep.getKid(1);
+
+			ref<Expr> cond = klee::UltExpr::create(klee::LShrExpr::create(e, rkid),e);
+			return cond;
+		}
 	    case Expr::LShr: res = visitLShr(static_cast<LShrExpr&>(ep)); break;
 	    case Expr::AShr: res = visitAShr(static_cast<AShrExpr&>(ep)); break;
 	    case Expr::Eq: res = visitEq(static_cast<EqExpr&>(ep)); break;
@@ -122,7 +122,7 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 	    case Expr::Sle: res = visitSle(static_cast<SleExpr&>(ep)); break;
 	    case Expr::Sgt: res = visitSgt(static_cast<SgtExpr&>(ep)); break;
 	    case Expr::Sge: res = visitSge(static_cast<SgeExpr&>(ep)); break;
-	    case Expr::Constant:
+	    case Expr::Constant: break;
 	    default:
 	      assert(0 && "invalid expression kind");
 	    }//switch

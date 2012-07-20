@@ -53,6 +53,8 @@ extern "C" {
 #include <iostream>
 #include <sstream>
 
+#include <list>
+
 #include <llvm/Support/TimeValue.h>
 #include <klee/Searcher.h>
 #include <klee/Solver.h>
@@ -563,68 +565,74 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 */
 	//打算这里对表达式进行重写
 
-	s2e()->getMessagesStream() << "symValue:" << symValue << '\n';
+	//s2e()->getMessagesStream() << "symValue:" << symValue << '\n';
 
-	ExprIOVisitor e;//李学新
-
-	klee::ref<klee::Expr> res;
-
-
-	//这里可以通过下面这个接口，先试试
-	res = e.visitOutsideOp(symValue);
-
-	s2e()->getMessagesStream() << "++++++res:  " << res << '\n';
-
-	if (res.get()->getWidth() != klee::Expr::Bool)
-		return;
-	
+	ExprIOVisitor e;
+	list < klee::ref<klee::Expr> > res;
+	klee::ref<klee::Expr> current,overflow;//current是当前处理的结点，overflow是重构后的条件。 by fwl
 	bool isTrue;
-	if (!(s2e()->getExecutor()->getSolver()->mayBeTrue(klee::Query(state->constraints, res), isTrue))) {
-		s2e()->getMessagesStream() << "Failed to assert the condition" << '\n';
-		return;
-    }
-	if (isTrue) {
-		ConcreteInputs inputs;
-		ConcreteInputs::iterator it;
 
-		//首先，把原来的constraints保存一下；
-		ConstraintManager constraints_before(state->constraints);
-		ConstraintManager * p_constraints;
-		p_constraints = &state->constraints;
+	res.push_back(symValue);
 
-		s2e()->getExecutor()->addConstraint(*state, res);//这里可以把约束条件添加进来么？
+	while (!res.empty()){
+		current = res.front();
+		//s2e()->getMessagesStream() << "######current:" << current << '\n';
+		res.pop_front();
+		overflow = e.visitOutsideOp(current);
+		//s2e()->getMessagesStream() << "######overflowKind:" << overflow.get()->getKind() << '\n';
+		if ((overflow.get()->getKind() == klee::Expr::Read))/*||
+				(overflow.get()->getKind() == klee::Expr::ReadLSB)||
+				(overflow.get()->getKind() == klee::Expr::ReadMSB))*/
+			continue;
+		if (overflow.get()->getWidth() == klee::Expr::Bool){
+			if (!(s2e()->getExecutor()->getSolver()->mayBeTrue(klee::Query(state->constraints, overflow), isTrue))) {
+				s2e()->getWarningsStream() << "Failed to assert the condition" << '\n';
+			}
+			if (isTrue){
+				ConcreteInputs inputs;
+				ConcreteInputs::iterator it;
 
-		std::string constraint_str;
+				//首先，把原来的constraints保存一下；
+				ConstraintManager constraints_before(state->constraints);
+				ConstraintManager * p_constraints;
+				p_constraints = &state->constraints;
 
-		s2e()->getExecutor()->getConstraintLog( *state, constraint_str, false);
-		s2e()->getMessagesStream() << "constraint_str: " << constraint_str.c_str() << " : ";
+				s2e()->getExecutor()->addConstraint(*state, overflow);//这里可以把约束条件添加进来么？
 
-		s2e()->getExecutor()->getSymbolicSolution(*state, inputs);
-		s2e()->getMessagesStream() << "---------malloc crash detected!" << '\n'
-								   << "---------input value : " << '\n';
-	    	for (it = inputs.begin(); it != inputs.end(); ++it) {
-	        	const VarValuePair &vp = *it;
-   		    	s2e()->getMessagesStream() << "---------" << vp.first << " : ";
+				std::string constraint_str;
 
-	        	for (unsigned i=0; i<vp.second.size(); ++i) {
-				 s2e()->getMessagesStream() << hexval((unsigned char) vp.second[i]) << " ";
-        		}
-   		    	s2e()->getMessagesStream() << '\n';
+				//s2e()->getExecutor()->getConstraintLog( *state, constraint_str, false);
+				//s2e()->getMessagesStream() << "constraint_str: " << constraint_str.c_str() << " : ";
+
+				s2e()->getExecutor()->getSymbolicSolution(*state, inputs);
+				s2e()->getMessagesStream() << "---------malloc crash detected!" << '\n'
+									   << "---------input value : " << '\n';
+				for (it = inputs.begin(); it != inputs.end(); ++it) {
+					const VarValuePair &vp = *it;
+					s2e()->getMessagesStream() << "---------" << vp.first << " : ";
+
+					for (unsigned i=0; i<vp.second.size(); ++i) {
+						s2e()->getMessagesStream() << hexval((unsigned char) vp.second[i]) << " ";
+					}
+					s2e()->getMessagesStream() << '\n';
+				}
+
+				//其次，等计算完了之后，再把相关的条件恢复过来，即可。
+				state->constraints = constraints_before;
+
+				//这里还需要把原来的constraints清空，这里是不是应该删除阿？
+				p_constraints->empty();
+				//delete p_constraints; //error!
+
+				//s2e()->getExecutor()->getConstraintLog( *state, constraint_str, false);
+				//s2e()->getMessagesStream() << "state.constraints: " << constraint_str.c_str() << " : ";
+				break;	
+			}
 		}
-
-	    //其次，等计算完了之后，再把相关的条件恢复过来，即可。
-	    	state->constraints = constraints_before;
-
-
-	    //这里还需要把原来的constraints清空，这里是不是应该删除阿？
-	    	p_constraints->empty();
-		delete p_constraints;
-
-		s2e()->getExecutor()->getConstraintLog( *state, constraint_str, false);
-		s2e()->getMessagesStream() << "state.constraints: " << constraint_str.c_str() << " : ";
+		for (int i = 0;i != current->getNumKids(); ++i){
+			res.push_back(current->getKid(i));			
+		}
 	}
-
-
 }
 
 
