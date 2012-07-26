@@ -66,10 +66,52 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 	    case Expr::Add: res = visitAdd(static_cast<AddExpr&>(ep));
 	    	{
 			ref<Expr> lkid = ep.getKid(0);
-	    		ref<Expr> rkid = ep.getKid(1);
+			ref<Expr> rkid = ep.getKid(1);
 
-	    		//std::cout << "e->Width:" << e.get()->getWidth() << '\n';/////这里Width还是不能使用
-		    	ref<Expr> cond = klee::UltExpr::create(e, lkid);
+	    		/*第一种实现方法
+				///无符号数处理
+		    	ref<Expr> condu = klee::UltExpr::create(e, lkid);
+				ref<Expr> zero = klee::ConstantExpr::create(0,e.get()->getWidth());
+				
+				///有符号数处理
+				//生成表达式 ( l≥0 ) And ( r≥0 ) And ( e≤0 ) 
+				ref<Expr> ls1 = klee::SgeExpr::create(lkid, zero);
+				ref<Expr> rs1 = klee::SgeExpr::create(rkid, zero);
+				ref<Expr> lrs1 = klee::AndExpr::create(ls1, rs1);
+				ref<Expr> es1 = klee::SltExpr::create(e, zero);				
+				ref<Expr> conds1 = klee::AndExpr::create(lrs1, es1);
+				
+				//生成表达式  ( l<0 ) And ( r<0 ) And ( e≥0 )
+				ref<Expr> ls2 = klee::SltExpr::create(lkid, zero);
+				ref<Expr> rs2 = klee::SltExpr::create(rkid, zero);
+				ref<Expr> lrs2 = klee::AndExpr::create(ls2, rs2);
+				ref<Expr> es2 = klee::SgeExpr::create(e, zero);				
+				ref<Expr> conds2 = klee::AndExpr::create(lrs2, es2);
+				
+				//合并有符号的表达式  ( l≥0 ) And ( r≥0 ) And ( e≤0 ) OR ( l<0 ) And ( r<0 ) And ( e≥0 )
+				ref<Expr> conds = klee::OrExpr::create(conds1, conds2);
+				
+				//合并有符号和无符号的表达式
+				ref<Expr> cond = klee::OrExpr::create(condu, conds);
+				*/
+			
+			
+				//第二种实现方法
+				///无符号的情况
+				ref<Expr> condu = klee::UltExpr::create(e, lkid);
+				ref<Expr> zero = klee::ConstantExpr::create(0,e.get()->getWidth());
+				
+				///有符号的情况：(((lhs + rhs) ^ lhs) & ((lhs + rhs) ^ rhs)) < 0)	直接判断符号位的变化
+				ref<Expr> sxorl = klee::XorExpr::create(e, lkid);
+				ref<Expr> sxorr = klee::XorExpr::create(e, rkid);
+				ref<Expr> cond = klee::SltExpr::create(klee::AndExpr::create(sxorl, sxorr), zero);
+				
+				
+				
+				//可否分为两种情况来看，无符号加法生成的表达式和有符号加法生成的表达式组合（或的关系）成一个表达式，来判断是否发生溢出
+				//关键是有符号的情况下如何判断溢出从而生成表达式？
+				
+				//ref<Expr> cond2 = klee::SltExpr::create();
 		    	return cond;
 	    	}
 	    case Expr::Sub: res = visitSub(static_cast<SubExpr&>(ep)); 
@@ -107,7 +149,7 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 
-			ref<Expr> cond = klee::UltExpr::create(klee::LShrExpr::create(e, rkid),e);
+			ref<Expr> cond = klee::UltExpr::create(klee::LShrExpr::create(e, rkid), lkid);
 			return cond;
 		}
 	    case Expr::LShr: res = visitLShr(static_cast<LShrExpr&>(ep)); break;

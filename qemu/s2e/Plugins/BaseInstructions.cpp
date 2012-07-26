@@ -565,7 +565,7 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 */
 	//打算这里对表达式进行重写
 
-	//s2e()->getMessagesStream() << "symValue:" << symValue << '\n';
+	s2e()->getMessagesStream() << "symValue:" << symValue << '\n';
 
 	ExprIOVisitor e;
 	list < klee::ref<klee::Expr> > res;
@@ -576,9 +576,11 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 
 	while (!res.empty()){
 		current = res.front();
-		//s2e()->getMessagesStream() << "######current:" << current << '\n';
+		s2e()->getMessagesStream() << "######current:" << current << '\n';
 		res.pop_front();
 		overflow = e.visitOutsideOp(current);
+		
+		s2e()->getMessagesStream() << "######overflow:" << overflow << '\n';
 		//s2e()->getMessagesStream() << "######overflowKind:" << overflow.get()->getKind() << '\n';
 		if ((overflow.get()->getKind() == klee::Expr::Read))/*||
 				(overflow.get()->getKind() == klee::Expr::ReadLSB)||
@@ -586,7 +588,7 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 			continue;
 		if (overflow.get()->getWidth() == klee::Expr::Bool){
 			if (!(s2e()->getExecutor()->getSolver()->mayBeTrue(klee::Query(state->constraints, overflow), isTrue))) {
-				s2e()->getWarningsStream() << "Failed to assert the condition" << '\n';
+				s2e()->getWarningsStream() << "Failed to assert the condition!!" << '\n';
 			}
 			if (isTrue){
 				ConcreteInputs inputs;
@@ -605,13 +607,14 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 				//s2e()->getMessagesStream() << "constraint_str: " << constraint_str.c_str() << " : ";
 
 				s2e()->getExecutor()->getSymbolicSolution(*state, inputs);
-				s2e()->getMessagesStream() << "---------malloc crash detected!" << '\n'
-									   << "---------input value : " << '\n';
+				s2e()->getMessagesStream()  << "---------malloc crash detected!" << '\n'
+											<< "---------input value : " << '\n';
 				for (it = inputs.begin(); it != inputs.end(); ++it) {
 					const VarValuePair &vp = *it;
-					s2e()->getMessagesStream() << "---------" << vp.first << " : ";
+					s2e()->getMessagesStream() 	<< "---------" << vp.first << " : ";
 
 					for (unsigned i=0; i<vp.second.size(); ++i) {
+					
 						s2e()->getMessagesStream() << hexval((unsigned char) vp.second[i]) << " ";
 					}
 					s2e()->getMessagesStream() << '\n';
