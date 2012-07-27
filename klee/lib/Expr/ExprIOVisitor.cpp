@@ -11,6 +11,7 @@
 #include "klee/util/ExprIOVisitor.h"//Int Overflow
 
 #include "llvm/Support/CommandLine.h"
+#include <math.h>
 
 #include <iostream>
 
@@ -68,6 +69,10 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 
+				/**
+				*	add by snowlxx  fwl
+				*	两种实现方式
+				**/
 	    		/*第一种实现方法
 				///无符号数处理
 		    	ref<Expr> condu = klee::UltExpr::create(e, lkid);
@@ -96,7 +101,7 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 				*/
 			
 			
-				//第二种实现方法
+				//第二种实现方式：kint的判断方法
 				///无符号的情况
 				ref<Expr> condu = klee::UltExpr::create(e, lkid);
 				ref<Expr> zero = klee::ConstantExpr::create(0,e.get()->getWidth());
@@ -104,7 +109,10 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 				///有符号的情况：(((lhs + rhs) ^ lhs) & ((lhs + rhs) ^ rhs)) < 0)	直接判断符号位的变化
 				ref<Expr> sxorl = klee::XorExpr::create(e, lkid);
 				ref<Expr> sxorr = klee::XorExpr::create(e, rkid);
-				ref<Expr> cond = klee::SltExpr::create(klee::AndExpr::create(sxorl, sxorr), zero);
+				ref<Expr> conds = klee::SltExpr::create(klee::AndExpr::create(sxorl, sxorr), zero);
+				
+				//组合表达式
+				ref<Expr> cond  = klee::OrExpr::create(condu, conds);
 				
 				
 				
@@ -118,8 +126,29 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 		{
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
+			ref<Expr> zero = klee::ConstantExpr::create(0,e.get()->getWidth());
 			
-			ref<Expr> cond = klee::UltExpr::create(lkid, rkid);
+			/**
+			*	add by snowlxx fwl
+			*	kint的实现方式
+			**/
+			//无符号判断方法
+			ref<Expr> condu = klee::UltExpr::create(lkid, rkid);
+			
+			
+			//有符号判断方法
+			///kint判断方法:( ( (lhs - rhs) ^ lhs ) & (lhs ^ rhs) ) < 0
+			///溢出的两种情况：1）正-负=负；2）负-正=正；
+			///另外的两种情况：3）正-正=负，归类到无符号判断；4）负-负，不会溢出
+			ref<Expr> elxor =klee::SubExpr::create(e, lkid);
+			ref<Expr> lrxor =klee::XorExpr::create(lkid, rkid);
+			ref<Expr> conds	=klee::SltExpr::create(klee::AndExpr::create(elxor, lrxor), zero);
+			
+			//组合表达式
+			ref<Expr> cond  = klee::OrExpr::create(condu, conds);
+			
+			
+			
 			return cond;
 		}
 	    case Expr::Mul: res = visitMul(static_cast<MulExpr&>(ep));
@@ -127,17 +156,83 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 			
+			
+			//是不是需要判断rkid！=0，该判断在UDiv的实现中
 			ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
 			return cond; 
 		}
 	    case Expr::UDiv: res = visitUDiv(static_cast<UDivExpr&>(ep)); 
 		{
 			ref<Expr> rkid = ep.getKid(1);
-
-			ref<Expr> cond = klee::NeExpr::create(rkid ,klee::ConstantExpr::create(0,ep.getWidth()));
+			ref<Expr> cond = klee::EqExpr::create(rkid ,klee::ConstantExpr::create(0,ep.getWidth()));
+			//ref<Expr> cond = klee::NeExpr::create(rkid ,klee::ConstantExpr::create(0,ep.getWidth()));
 			return cond;
 		}
-	    case Expr::SDiv: res = visitSDiv(static_cast<SDivExpr&>(ep)); break;
+		case Expr::SDiv: res = visitSDiv(static_cast<SDivExpr&>(ep));
+		{
+			ref<Expr> lkid = ep.getKid(0);
+			ref<Expr> rkid = ep.getKid(1);
+			ref<Expr> zero = klee::ConstantExpr::create(0,ep.getWidth());
+			
+			//这样来扩展-1是错误的
+			//ref<Expr> neg1 = klee::ConstantExpr::create(-1,ep.getWidth());
+			
+			//ConstantExpr::create中，第一个数是无符号64位数
+			ref<Expr> neg1 = klee::SubExpr::create(zero, klee::ConstantExpr::create(1,ep.getWidth()));
+			
+			/*
+			//第一种实现方式
+			//(rkid == 0) || ((lkid == e) &&(lkid !=0) && (rkid == -1))
+			///(rkid == 0)
+			ref<Expr> cond1 = klee::EqExpr::create(rkid, zero);
+			
+			
+			///(rkid == -1)
+			ref<Expr> req1	= klee::EqExpr::create(rkid, neg1);
+			
+			///(lkid == e)
+			ref<Expr> leqe	= klee::EqExpr::create(lkid, e);
+			///(lkid !=0) 
+			ref<Expr> lneqz	= klee::NeExpr::create(lkid,zero);
+			ref<Expr> lcond = klee::AndExpr::create(leqe, lneqz);
+						
+			ref<Expr> cond2 = klee::AndExpr::create(lcond, req1);//按位与和逻辑与，在此处应该是相同的
+			
+			
+			
+			
+			ref<Expr> cond	= klee::OrExpr::create(cond1, cond2);//按位或和逻辑或，在此处是否相同？应该相同
+			*/
+			
+			
+			///*
+			//第二种实现方式
+			//(rhs == 0) || ((lhs == INT##n##_MIN) && (rhs == -1))
+			//计算2的（n-1）次方,pow是double型，先强制转换成int型，然后转换成Expr
+			ref<Expr> pown = klee::ConstantExpr::create((int)pow(2, (ep.getWidth()-1)), ep.getWidth());
+			///是否等于负的2的（n-1）次方
+			ref<Expr> leqn	= klee::EqExpr::create(lkid, klee::SubExpr::create(zero, pown));
+			ref<Expr> req1	= klee::EqExpr::create(rkid, neg1);
+			ref<Expr> cond2 = klee::AndExpr::create(leqn, req1);
+			ref<Expr> cond1 = klee::EqExpr::create(rkid, zero);
+			ref<Expr> cond	= klee::OrExpr::create(cond1,cond2);
+			
+			
+			
+			//*/
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			return cond;
+		}
 	    case Expr::URem: res = visitURem(static_cast<URemExpr&>(ep)); break;
 	    case Expr::SRem: res = visitSRem(static_cast<SRemExpr&>(ep)); break;
 	    case Expr::Not: res = visitNot(static_cast<NotExpr&>(ep)); break;
@@ -390,4 +485,3 @@ ExprIOVisitor::Action ExprIOVisitor::visitSgt(const SgtExpr&) {
 ExprIOVisitor::Action ExprIOVisitor::visitSge(const SgeExpr&) {
   return Action::doChildren(); 
 }
-
