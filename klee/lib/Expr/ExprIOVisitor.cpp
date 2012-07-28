@@ -227,9 +227,6 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 						
 			ref<Expr> cond2 = klee::AndExpr::create(lcond, req1);//按位与和逻辑与，在此处应该是相同的
 			
-			
-			
-			
 			ref<Expr> cond	= klee::OrExpr::create(cond1, cond2);//按位或和逻辑或，在此处是否相同？应该相同
 			*/
 			
@@ -244,36 +241,48 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			ref<Expr> req1	= klee::EqExpr::create(rkid, neg1);
 			ref<Expr> cond2 = klee::AndExpr::create(leqn, req1);
 			ref<Expr> cond1 = klee::EqExpr::create(rkid, zero);
-			ref<Expr> cond	= klee::OrExpr::create(cond1,cond2);
-			
-			
+			ref<Expr> cond	= klee::OrExpr::create(cond1,cond2);			
 			
 			//*/
 			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
 			return cond;
 		}
-	    case Expr::URem: res = visitURem(static_cast<URemExpr&>(ep)); break;
-	    case Expr::SRem: res = visitSRem(static_cast<SRemExpr&>(ep)); break;
-	    case Expr::Not: res = visitNot(static_cast<NotExpr&>(ep)); break;
-	    case Expr::And: res = visitAnd(static_cast<AndExpr&>(ep)); break;
-	    case Expr::Or: res = visitOr(static_cast<OrExpr&>(ep)); break;
-	    case Expr::Xor: res = visitXor(static_cast<XorExpr&>(ep)); break;
+		
+		case Expr::URem: res = visitURem(static_cast<URemExpr&>(ep)); 
+		{
+			ref<Expr> rkid = ep.getKid(1);
+			ref<Expr> zero = klee::ConstantExpr::create(0,ep.getWidth());
+			
+			ref<Expr> cond = klee::EqExpr::create(zero, rkid);
+			return cond;
+		}
+	    case Expr::SRem: res = visitSRem(static_cast<SRemExpr&>(ep)); 
+		{
+				ref<Expr> rkid = ep.getKid(1);
+				ref<Expr> zero = klee::ConstantExpr::create(0,ep.getWidth());
+				
+				ref<Expr> cond = klee::EqExpr::create(zero, rkid);
+				return cond;
+		}
+	    case Expr::Not: res = visitNot(static_cast<NotExpr&>(ep)); break;//应该不会发生溢出
+	    case Expr::And: res = visitAnd(static_cast<AndExpr&>(ep)); break;//应该不会发生溢出
+	    case Expr::Or: res = visitOr(static_cast<OrExpr&>(ep)); break;//应该不会发生溢出
+	    case Expr::Xor: res = visitXor(static_cast<XorExpr&>(ep)); break;//应该不会发生溢出
 	    case Expr::Shl: res = visitShl(static_cast<ShlExpr&>(ep));
 		{
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 
-			ref<Expr> cond = klee::UltExpr::create(klee::LShrExpr::create(e, rkid), lkid);
+			//当一个操作数为常数（确切的说是和2的整数次方相近）时，Mul会自动优化为Shl，该Shl需要判断是否溢出
+			ref<Expr> cond1 = klee::UltExpr::create(klee::LShrExpr::create(e, rkid), lkid);
+			
+			//原操作就是Shl的情况下，需要判断rkid>=Width的情况
+			ref<Expr> ewidth = klee::ConstantExpr::create(e.get()->getWidth(),e.get()->getWidth());
+			ref<Expr> cond2  = klee::UgeExpr::create(rkid, ewidth);
+			
+			//合并条件表达式
+			ref<Expr> cond = klee::OrExpr::create(cond1, cond2);
+			
 			return cond;
 		}
 	    case Expr::LShr: res = visitLShr(static_cast<LShrExpr&>(ep)); break;
