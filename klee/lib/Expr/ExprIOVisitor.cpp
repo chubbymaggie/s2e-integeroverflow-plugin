@@ -157,8 +157,37 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			ref<Expr> rkid = ep.getKid(1);
 			
 			
+			
+			/**
+			*	add by snowlxx fwl
+			*	
+			**/
+			
 			//是不是需要判断rkid！=0，该判断在UDiv的实现中
-			ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
+			//ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
+			ref<Expr> condu = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
+			
+			//kint的判断条件:(s##n)(tmp >> n) != ((s##n)tmp) >> (n - 1)
+			
+			unsigned int wth = ep.getWidth()/2;
+			//AShrExpr的左右kid都必须是Expr，width也必须保持一致
+			ref<Expr> wthexpr = klee::ConstantExpr::create(wth,ep.getWidth());
+			ref<Expr> wthexpr1 = klee::ConstantExpr::create(wth-1,wth);
+			
+			
+			
+			ref<Expr> eashr2n	= klee::ExtractExpr::create(klee::AShrExpr::create(e, wthexpr), 0, wth);
+			
+			ref<Expr> eashrn	= klee::AShrExpr::create(klee::ExtractExpr::create(e, 0, wth), wthexpr1);
+			
+			ref<Expr> conds		= klee::NeExpr::create(eashr2n, eashrn);
+			
+			//无符号和有符号结合
+			ref<Expr> cond 		= klee::OrExpr::create(condu, conds);
+					
+			
+			
+			
 			return cond; 
 		}
 	    case Expr::UDiv: res = visitUDiv(static_cast<UDivExpr&>(ep)); 
