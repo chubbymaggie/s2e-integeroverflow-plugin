@@ -276,11 +276,14 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			//当一个操作数为常数（确切的说是和2的整数次方相近）时，Mul会自动优化为Shl，该Shl需要判断是否溢出
 			ref<Expr> cond1 = klee::UltExpr::create(klee::LShrExpr::create(e, rkid), lkid);
 			
-			//原操作就是Shl的情况下，需要判断rkid>=Width的情况
-			ref<Expr> ewidth = klee::ConstantExpr::create(e.get()->getWidth(),e.get()->getWidth());
-			ref<Expr> cond2  = klee::UgeExpr::create(rkid, ewidth);
+			//1、gcc在编译程序时如果采用了优化选项，那么左移33位就会优化为左移1位，这里不考虑这种情况
+			//2、目前的测试结果是，一旦rkid超出了width，s2e产生的条件表达式就直为空，那么下面的处理是否就不需要了？？？
+			///原操作就是Shl的情况下，需要判断rkid>=Width的情况
+			unsigned int z = ep.getWidth();
+			ref<Expr> ewidth = klee::ConstantExpr::create(z, ep.getWidth());
+			ref<Expr> cond2  = klee::UleExpr::create(ewidth, rkid);
 			
-			//合并条件表达式
+			///合并条件表达式
 			ref<Expr> cond = klee::OrExpr::create(cond1, cond2);
 			
 			return cond;
