@@ -140,7 +140,7 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			///kint判断方法:( ( (lhs - rhs) ^ lhs ) & (lhs ^ rhs) ) < 0
 			///溢出的两种情况：1）正-负=负；2）负-正=正；
 			///另外的两种情况：3）正-正=负，归类到无符号判断；4）负-负，不会溢出
-			ref<Expr> elxor =klee::SubExpr::create(e, lkid);
+			ref<Expr> elxor =klee::XorExpr::create(e, lkid);
 			ref<Expr> lrxor =klee::XorExpr::create(lkid, rkid);
 			ref<Expr> conds	=klee::SltExpr::create(klee::AndExpr::create(elxor, lrxor), zero);
 			
@@ -162,10 +162,12 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			*	add by snowlxx fwl
 			*	
 			**/
-			
+		
+			ref<Expr> zero = klee::ConstantExpr::create(0,ep.getWidth());			
+	
 			//是不是需要判断rkid！=0，该判断在UDiv的实现中
 			//ref<Expr> cond = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
-			ref<Expr> condu = klee::UltExpr::create(klee::UDivExpr::create(e, rkid), lkid);
+			//ref<Expr> condu = klee::NeExpr::create(klee::LShrExpr::create(e, ep.getWidth()), zero);
 			
 			//kint的判断条件:(s##n)(tmp >> n) != ((s##n)tmp) >> (n - 1)
 			
@@ -173,7 +175,9 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			//AShrExpr的左右kid都必须是Expr，width也必须保持一致
 			ref<Expr> wthexpr = klee::ConstantExpr::create(wth,ep.getWidth());
 			ref<Expr> wthexpr1 = klee::ConstantExpr::create(wth-1,wth);
-			
+		
+			//UMul expr	
+			ref<Expr> condu = klee::NeExpr::create(klee::LShrExpr::create(e, wthexpr), zero);
 			
 			
 			ref<Expr> eashr2n	= klee::ExtractExpr::create(klee::AShrExpr::create(e, wthexpr), 0, wth);
@@ -199,15 +203,18 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 		}
 		case Expr::SDiv: res = visitSDiv(static_cast<SDivExpr&>(ep));
 		{
+			//std::cout << "ep.width:" << ep.getWidth() << '\n';
 			ref<Expr> lkid = ep.getKid(0);
 			ref<Expr> rkid = ep.getKid(1);
 			ref<Expr> zero = klee::ConstantExpr::create(0,ep.getWidth());
+			//std::cout << "rkid:" << rkid << '\n';
 			
 			//这样来扩展-1是错误的
 			//ref<Expr> neg1 = klee::ConstantExpr::create(-1,ep.getWidth());
 			
 			//ConstantExpr::create中，第一个数是无符号64位数
 			ref<Expr> neg1 = klee::SubExpr::create(zero, klee::ConstantExpr::create(1,ep.getWidth()));
+			//std::cout << "-1:" << neg1 << '\n';
 			
 			/*
 			//第一种实现方式
@@ -235,7 +242,8 @@ ref<Expr> ExprIOVisitor::visitOutsideOp(const ref<Expr> &e) {
 			//第二种实现方式
 			//(rhs == 0) || ((lhs == INT##n##_MIN) && (rhs == -1))
 			//计算2的（n-1）次方,pow是double型，先强制转换成int型，然后转换成Expr
-			ref<Expr> pown = klee::ConstantExpr::create((int)pow(2, (ep.getWidth()-1)), ep.getWidth());
+			ref<Expr> pown = klee::ConstantExpr::create((int64_t)pow(2, (ep.getWidth()/2 - 1)), ep.getWidth());
+			//std::cout << "2^31:" << pown << '\n';
 			///是否等于负的2的（n-1）次方
 			ref<Expr> leqn	= klee::EqExpr::create(lkid, klee::SubExpr::create(zero, pown));
 			ref<Expr> req1	= klee::EqExpr::create(rkid, neg1);

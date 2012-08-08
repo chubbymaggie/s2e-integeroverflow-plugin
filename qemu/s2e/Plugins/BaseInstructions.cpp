@@ -576,24 +576,11 @@ void BaseInstructions::getIntOverflowExample(S2EExecutionState *state)
 
 	while (!res.empty()){
 		current = res.front();
-		s2e()->getMessagesStream() << "######current:" << current << '\n';
+		s2e()->getMessagesStream() << "####current:" << current << '\n';
 		res.pop_front();
 		overflow = e.visitOutsideOp(current);
 		
-		s2e()->getMessagesStream() << "######overflow:" << overflow << '\n';
-		
-		
-		
-		
-		//klee::ref<klee::Expr> fuyi = klee::ConstantExpr::create(-1,klee::Expr::Int32);
-		//s2e()->getMessagesStream() << "*********-1扩展的Expr:" << fuyi << '\n';
-		//ref<Expr> zerr = klee::ConstantExpr::create(0,current.get()->getWidth());
-		//ref<Expr> negt = klee::SubExpr::create(zerr, klee::ConstantExpr::create(1,current.get()->getWidth()));
-		//s2e()->getMessagesStream() << "*********-1扩展的Expr:" << negt << '\n';
-		
-		
-		
-		
+		s2e()->getMessagesStream() << "####overflow:" << overflow << '\n';
 		
 		//s2e()->getMessagesStream() << "######overflowKind:" << overflow.get()->getKind() << '\n';
 		if ((overflow.get()->getKind() == klee::Expr::Read))/*||
